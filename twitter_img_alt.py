@@ -26,6 +26,8 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import print_function
 import itertools
+import twitter
+import json
 
 def getSecrets(secrets_file='secrets'):
     """ Retrieve secrets from a file called 'secrets'.
@@ -45,7 +47,7 @@ class Mentions:
     """ Adapter for twitter API that retrieves mentions.
     """
 
-    def __init__(self, twitterApi, since_id=None, status_file='state')
+    def __init__(self, twitterApi, since_id=None, status_file='state'):
         """ Create a new mentions instance, using the specified twitter API.
             If since_id is not None, it will only evaluate mentions after that ID.
 
@@ -60,7 +62,10 @@ class Mentions:
         if self.since_id is None and self.status_file is not None:
             with open(self.status_file, 'r') as f:
                 self.status = json.load(f)
-                self.since_id = self.status['since_id']
+                try:
+                    self.since_id = self.status['since_id']
+                except KeyError:
+                    pass
 
     def _maybeUpdateStatusFile(self):
         self.status['since_id'] = self.since_id
@@ -74,7 +79,7 @@ class Mentions:
         mentions = self.rawGetMentions()
         if len(mentions) > 0:
             self.since_id = max(mentions, lambda m: m.id)
-            _maybeUpdateStatusFile()
+            self._maybeUpdateStatusFile()
 
     def rawGetNewMentions(self):
         """ Gets new mentions, but does not do any state updates.
@@ -83,10 +88,10 @@ class Mentions:
             count=200, # Max count
             since_id=self.since_id)
 
-    def streaming(self, empty_sleep=60):
+    def stream(self, empty_sleep=60):
         """ Generator emitting one mention at a time.
         """
-        import time.sleep
+        from time import sleep
 
         while True:
             mentions = sorted(self.rawGetNewMentions(), key = lambda x: x.id)
@@ -94,18 +99,58 @@ class Mentions:
                 sleep(empty_sleep)
             for m in mentions:
                 self.since_id = m.id
-                _maybeUpdateStatusFile()
+                self._maybeUpdateStatusFile()
                 yield m
+
+def generateAccessTokens():
+    REQUEST_TOKEN_URL = 'https://api.twitter.com/oauth/request_token'
+    ACCESS_TOKEN_URL = 'https://api.twitter.com/oauth/access_token'
+    AUTHORIZATION_URL = 'https://api.twitter.com/oauth/authorize'
+    SIGNIN_URL = 'https://api.twitter.com/oauth/authenticate'
+
+    from requests_oauthlib import OAuth1Session
+    secrets = getSecrets()
+    consumer_key = secrets['consumer_key']
+    consumer_secret = secrets['consumer_secret']
+    oauth_client = OAuth1Session(consumer_key, client_secret=consumer_secret, callback_uri='oob')
+    try:
+        resp = oauth_client.fetch_request_token(REQUEST_TOKEN_URL)
+    except ValueError as e:
+        raise BadAccess('Invalid response from Twitter requesting temp token: {0}'.format(e))
+
+    url = oauth_client.authorization_url(AUTHORIZATION_URL)
+
+    print('Please visit this URL to grant access:\n{0}\n'.format(url))
+    pin = raw_input('Pin code: ')
+
+    oauth_client = OAuth1Session(consumer_key, client_secret=consumer_secret,
+                                 resource_owner_key=resp.get('oauth_token'),
+                                 resource_owner_secret=resp.get('oauth_token_secret'),
+                                 verifier=pin)
+    try:
+        resp = oauth_client.fetch_access_token(ACCESS_TOKEN_URL)
+    except ValueError as e:
+        raise BadAccess('Invalid response from Twitter requesting temp token: {0}'.format(e))
+
+    secrets['access_token_key'] = resp.get('oauth_token')
+    secrets['access_token_secret'] = resp.get('oauth_token_secret')
+    with open('secrets', 'w') as f:
+        for (k, v) in secrets.iteritems():
+            f.write('{k} = {v}\n'.format(k=k, v=v))
 
 if __name__ == '__main__':
     import sys
+
+    if False:
+        generateAccessTokens()
+        sys.exit(0)
 
     twitterApi = twitter.Api(tweet_mode='extended', sleep_on_rate_limit=True, **getSecrets())
     verify = twitterApi.VerifyCredentials()
     if verify is None:
         print('Invalid credentials\n')
         sys.exit(1)
-    print(u'Verification success, logged in as: @{user.screen_name} (id={user.id}: {user.name})\n'.format(verify))
+    print(u'Verification success, logged in as: @{user.screen_name} (id={user.id}: {user.name})\n'.format(user=verify))
 
-    for mention in Mentions(twitterApi):
-        print mention
+    for mention in Mentions(twitterApi).stream():
+        print(mention)
