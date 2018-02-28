@@ -138,6 +138,89 @@ def generateAccessTokens():
         for (k, v) in secrets.iteritems():
             f.write('{k} = {v}\n'.format(k=k, v=v))
 
+def findParentOrQuotedTweet(twitterApi, tweet):
+    """ Find the tweet this is a response to, or the quoted tweet.
+    """
+    if tweet.quoted_status is not None:
+        return tweet.quoted_status
+
+    try:
+        return twitterApi.GetStatus(tweet.AsDict()['in_reply_to_status_id'])
+    except KeyError:
+        return None
+
+def createAnnotations(twitterApi, tweet):
+    """ Generate annotations for a tweet.
+
+        Returns a list of alt text.
+        If the tweet contains no images, an empty list is returned.
+    """
+    media_images = [x for x in tweet.media if x.type == 'photo']
+    if len(media_images) == 0:
+        return list()
+    return [img.ext_alt_text for img in media_images]
+
+def annotationsToStatuses(annotations, maxlen):
+    # Prefix annotations with image index, if there are more than one images.
+    if len(annotations) > 1:
+        annotations = [u'Image {0}:\n{1}'.format(idx, txt)
+            for (idx, txt) in itertools.izip(
+                range(1, len(annotations) + 1),
+                [x or 'No alt text.' for x in annotations])]
+
+    result = list()
+    for annot in annotations:
+        annot = annot.strip()
+        while len(annot) > maxlen:
+            split_idx = annot.rfind('\n', 0, maxlen + 1)
+            if split_idx == -1:
+                split_idx = annot.rfind(' ', 0, maxlen + 1)
+
+            if split_idx == -1: # Middle of word splitting.
+                result.append(annot[:maxlen])
+                annot = annot[maxlen:]
+            else: # Splitting across line break or word.
+                result.append(annot[:split_idx])
+                annot = annot[split_idx+1:]
+        result.append(annot)
+    return result
+
+def postReply(twitterApi, respondToTweet, text, user, self_user, first=True):
+    """ Post a reply to the given tweet.
+        If first is set, the automatic metadata is suppressed.
+        Param users: list of users to reply to.
+    """
+    print(u'Posting response to {respondToTweet.id}:\n------------------------------------------------------------------------\n{text}\n------------------------------------------------------------------------'.format(respondToTweet=respondToTweet, text=text))
+    exclude=[x.id for x in respondToTweet.user_mentions if x.id not in [user.id, self.id]]
+    print(u'Excluding user IDs: {0}'.format(exclude))
+
+    return twitterApi.PostUpdate(
+        status=u'@{user.screen_name} {text}'.format(user=user, text=text),
+        in_reply_to_status_id=respondToTweet.id,
+        exclude_reply_user_ids=exclude,
+        verify_status_length=False)
+
+def annotateTweet(twitterApi, respondToTweet, toAnnotate, self):
+    """ Annotate the tweet in toAnnotate.
+    """
+    user = respondToTweet.user
+
+    annotations = createAnnotations(twitterApi, toAnnotate)
+    if len(annotations) == 0:
+        postReply(twitterApi, respondToTweet, u'''Sorry, I don't see any images in the tweet.''', user, self)
+        return
+
+    statuses = annotationsToStatuses(annotations, 130)
+    idx = 1
+    if len(statuses) == 1: # Single reply, keep it short.
+        postReply(twitterApi, respondToTweet, statuses[0], user, self)
+    else: # Multiple replies, threaded.
+        first_reply = True
+        for (status, idx) in zip(statuses, range(1, len(statuses) + 1)):
+            msg = u'{0} [{1}/{2}]'.format(status.trim(), idx, len(statuses))
+            respondToTweet = postReply(twitterApi, respondToTweet, msg, user, self, first_reply)
+            first_reply = False # Don't clear metadata in subsequent responses.
+
 if __name__ == '__main__':
     import sys
 
@@ -146,11 +229,21 @@ if __name__ == '__main__':
         sys.exit(0)
 
     twitterApi = twitter.Api(tweet_mode='extended', sleep_on_rate_limit=True, **getSecrets())
-    verify = twitterApi.VerifyCredentials()
-    if verify is None:
-        print('Invalid credentials\n')
+    # self is the active user
+    self = twitterApi.VerifyCredentials()
+    if self is None:
+        print('Invalid credentials')
         sys.exit(1)
-    print(u'Verification success, logged in as: @{user.screen_name} (id={user.id}: {user.name})\n'.format(user=verify))
+    print(u'Verification success, logged in as: @{user.screen_name} (id={user.id}: {user.name})\n'.format(user=self))
 
     for mention in Mentions(twitterApi).stream():
-        print(mention)
+        if mention.user.id != self.id:
+            print(u'tweet ID {mention.id} from @{mention.user.screen_name}: {mention.full_text}'.format(mention=mention))
+
+            # Figure out which tweet to annotate.
+            toAnnotate = findParentOrQuotedTweet(twitterApi, mention)
+            if toAnnotate is not None:
+                annotateTweet(twitterApi, mention, toAnnotate, self)
+            else:
+                print('Nothing to annotate.')
+            print('Done processing tweet ID {mention.id}.\n'.format(mention=mention))
