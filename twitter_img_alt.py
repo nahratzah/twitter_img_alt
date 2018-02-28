@@ -88,7 +88,7 @@ class Mentions:
             count=200, # Max count
             since_id=self.since_id)
 
-    def stream(self, empty_sleep=60):
+    def stream(self, empty_sleep=15):
         """ Generator emitting one mention at a time.
         """
         from time import sleep
