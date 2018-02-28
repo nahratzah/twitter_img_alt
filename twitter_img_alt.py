@@ -142,7 +142,7 @@ def findParentOrQuotedTweet(twitterApi, tweet):
     """ Find the tweet this is a response to, or the quoted tweet.
     """
     if tweet.quoted_status is not None:
-        return tweet.quoted_status
+        return twitterApi.GetStatus(tweet.quoted_status.id)
 
     try:
         return twitterApi.GetStatus(tweet.AsDict()['in_reply_to_status_id'])
@@ -217,7 +217,7 @@ def annotateTweet(twitterApi, respondToTweet, toAnnotate, self):
     else: # Multiple replies, threaded.
         first_reply = True
         for (status, idx) in zip(statuses, range(1, len(statuses) + 1)):
-            msg = u'{0} [{1}/{2}]'.format(status.trim(), idx, len(statuses))
+            msg = u'{0} [{1}/{2}]'.format(status.strip(), idx, len(statuses))
             respondToTweet = postReply(twitterApi, respondToTweet, msg, user, self, first_reply)
             first_reply = False # Don't clear metadata in subsequent responses.
 
