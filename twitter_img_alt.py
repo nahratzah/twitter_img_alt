@@ -158,7 +158,10 @@ def createAnnotations(twitterApi, tweet):
     media_images = [x for x in tweet.media if x.type == 'photo']
     if len(media_images) == 0:
         return list()
-    return [img.ext_alt_text for img in media_images]
+    alt_text_list = [img.ext_alt_text for img in media_images]
+    if all([x is None for x in alt_text_list]):
+        return [u'''No alt text :'(''']
+    return [x or 'Missing alt text' for x in alt_text_list]
 
 def annotationsToStatuses(annotations, maxlen):
     # Prefix annotations with image index, if there are more than one images.
@@ -166,7 +169,7 @@ def annotationsToStatuses(annotations, maxlen):
         annotations = [u'Image {0}:\n{1}'.format(idx, txt)
             for (idx, txt) in itertools.izip(
                 range(1, len(annotations) + 1),
-                [x or 'No alt text.' for x in annotations])]
+                [x for x in annotations])]
 
     result = list()
     for annot in annotations:
