@@ -155,13 +155,16 @@ def createAnnotations(twitterApi, tweet):
         Returns a list of alt text.
         If the tweet contains no images, an empty list is returned.
     """
-    media_images = [x for x in tweet.media if x.type == 'photo']
-    if len(media_images) == 0:
+    try:
+        media_images = [x for x in tweet.media if x.type == 'photo']
+        if len(media_images) == 0:
+            return list()
+        alt_text_list = [img.ext_alt_text for img in media_images]
+        if all([x is None for x in alt_text_list]):
+            return [u'''No alt text :'(''']
+        return [x or 'Missing alt text' for x in alt_text_list]
+    except TypeError:
         return list()
-    alt_text_list = [img.ext_alt_text for img in media_images]
-    if all([x is None for x in alt_text_list]):
-        return [u'''No alt text :'(''']
-    return [x or 'Missing alt text' for x in alt_text_list]
 
 def annotationsToStatuses(annotations, maxlen):
     # Prefix annotations with image index, if there are more than one images.
