@@ -27,11 +27,11 @@
 from __future__ import print_function
 import itertools
 
-def get_secrets(fname='secrets'):
+def getSecrets(secrets_file='secrets'):
     """ Retrieve secrets from a file called 'secrets'.
         Returns a dict of keys.
     """
-    with open(fname) as f:
+    with open(secrets_file, 'r') as f:
         return dict(
             itertools.imap(
                 lambda x: (x[0].strip(), x[1].strip().strip('"\'')),
@@ -40,3 +40,72 @@ def get_secrets(fname='secrets'):
                     itertools.imap(
                         lambda line: tuple(line.split('=', 1)),
                         f.readlines()))))
+
+class Mentions:
+    """ Adapter for twitter API that retrieves mentions.
+    """
+
+    def __init__(self, twitterApi, since_id=None, status_file='state')
+        """ Create a new mentions instance, using the specified twitter API.
+            If since_id is not None, it will only evaluate mentions after that ID.
+
+            If status_file is specified, it will retrieve the since_id from it
+            and update it while progressing.
+        """
+        self.twitterApi = twitterApi
+        self.since_id = since_id
+        self.status_file = status_file
+        self.status = dict() # File data
+
+        if self.since_id is None and self.status_file is not None:
+            with open(self.status_file, 'r') as f:
+                self.status = json.load(f)
+                self.since_id = self.status['since_id']
+
+    def _maybeUpdateStatusFile(self):
+        self.status['since_id'] = self.since_id
+        if self.status_file is not None:
+            with open(self.status_file, 'w') as f:
+                json.dump(self.status, f)
+
+    def getNewMentions(self):
+        """ Get new mentions.
+        """
+        mentions = self.rawGetMentions()
+        if len(mentions) > 0:
+            self.since_id = max(mentions, lambda m: m.id)
+            _maybeUpdateStatusFile()
+
+    def rawGetNewMentions(self):
+        """ Gets new mentions, but does not do any state updates.
+        """
+        return self.twitterApi.GetMentions(
+            count=200, # Max count
+            since_id=self.since_id)
+
+    def streaming(self, empty_sleep=60):
+        """ Generator emitting one mention at a time.
+        """
+        import time.sleep
+
+        while True:
+            mentions = sorted(self.rawGetNewMentions(), key = lambda x: x.id)
+            if len(mentions) == 0:
+                sleep(empty_sleep)
+            for m in mentions:
+                self.since_id = m.id
+                _maybeUpdateStatusFile()
+                yield m
+
+if __name__ == '__main__':
+    import sys
+
+    twitterApi = twitter.Api(tweet_mode='extended', sleep_on_rate_limit=True, **getSecrets())
+    verify = twitterApi.VerifyCredentials()
+    if verify is None:
+        print('Invalid credentials\n')
+        sys.exit(1)
+    print(u'Verification success, logged in as: @{user.screen_name} (id={user.id}: {user.name})\n'.format(verify))
+
+    for mention in Mentions(twitterApi):
+        print mention
