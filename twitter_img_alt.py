@@ -28,6 +28,17 @@ from __future__ import print_function
 import itertools
 import twitter
 import json
+import logging
+
+_LOG = logging.getLogger(__name__)
+
+class BadAccess(Exception):
+    def __init__(self, msg):
+        BaseException.__init__(self)
+        self.msg = msg
+
+    def __str__(self):
+        return self.msg
 
 def getSecrets(secrets_file='secrets'):
     """ Retrieve secrets from a file called 'secrets'.
@@ -196,9 +207,9 @@ def postReply(twitterApi, respondToTweet, text, user, self_user, first=True):
         If first is set, the automatic metadata is suppressed.
         Param users: list of users to reply to.
     """
-    print(u'Posting response to {respondToTweet.id}:\n------------------------------------------------------------------------\n{text}\n------------------------------------------------------------------------'.format(respondToTweet=respondToTweet, text=text))
+    _LOG.info(u'Posting response to {respondToTweet.id}:\n------------------------------------------------------------------------\n{text}\n------------------------------------------------------------------------'.format(respondToTweet=respondToTweet, text=text))
     exclude=[x.id for x in respondToTweet.user_mentions if x.id not in [user.id, self.id]]
-    print(u'Excluding user IDs: {0}'.format(exclude))
+    _LOG.info(u'Excluding user IDs: {0}'.format(exclude))
 
     return twitterApi.PostUpdate(
         status=u'@{user.screen_name} {text}'.format(user=user, text=text),
@@ -229,6 +240,7 @@ def annotateTweet(twitterApi, respondToTweet, toAnnotate, self):
 
 if __name__ == '__main__':
     import sys
+    logging.basicConfig(level=logging.INFO)
 
     if False:
         generateAccessTokens()
@@ -238,18 +250,21 @@ if __name__ == '__main__':
     # self is the active user
     self = twitterApi.VerifyCredentials()
     if self is None:
-        print('Invalid credentials')
+        _LOG.error('Invalid credentials')
         sys.exit(1)
-    print(u'Verification success, logged in as: @{user.screen_name} (id={user.id}: {user.name})\n'.format(user=self))
+    _LOG.info(u'Verification success, logged in as: @{user.screen_name} (id={user.id}: {user.name})\n'.format(user=self))
 
     for mention in Mentions(twitterApi).stream():
-        if mention.user.id != self.id:
-            print(u'tweet ID {mention.id} from @{mention.user.screen_name}: {mention.full_text}'.format(mention=mention))
+        try:
+            if mention.user.id != self.id:
+                _LOG.info(u'tweet ID {mention.id} from @{mention.user.screen_name}: {mention.full_text}'.format(mention=mention))
 
-            # Figure out which tweet to annotate.
-            toAnnotate = findParentOrQuotedTweet(twitterApi, mention)
-            if toAnnotate is not None:
-                annotateTweet(twitterApi, mention, toAnnotate, self)
-            else:
-                print('Nothing to annotate.')
-            print('Done processing tweet ID {mention.id}.\n'.format(mention=mention))
+                # Figure out which tweet to annotate.
+                toAnnotate = findParentOrQuotedTweet(twitterApi, mention)
+                if toAnnotate is not None:
+                    annotateTweet(twitterApi, mention, toAnnotate, self)
+                else:
+                    _LOG.info('Nothing to annotate.')
+                _LOG.info('Done processing tweet ID {mention.id}.\n'.format(mention=mention))
+        except Exception:
+            _LOG.exception(u'Failed to process https://twitter.com/{mention.user.screen_name}/status/{mention.id}'.format(mention=mention))
