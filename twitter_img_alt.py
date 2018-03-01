@@ -248,7 +248,9 @@ def _setupLogging(path='logging.yml', default_level=logging.INFO):
         with open(path, 'rt') as f:
             logging.config.dictConfig(yaml.safe_load(f.read()))
     else:
-        logging.basicConfig(level=default_logging)
+        logging.basicConfig(level=default_level)
+        _LOG().warn('No {0} found.'.format(path))
+    _LOG().info("Starting up, working dir = {0}".format(os.getcwd()))
 
 if __name__ == '__main__':
     import sys
