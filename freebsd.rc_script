@@ -1,0 +1,24 @@
+#!/bin/sh
+#
+
+# PROVIDE: twitter_img_alt
+# REQUIRE: DAEMON NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="twitter_img_alt"
+rcvar="twitter_img_alt_enable"
+load_rc_config $name
+
+: ${twitter_img_alt_drop_to_user:="${name}"}
+: ${twitter_img_alt_home:="/home/${twitter_img_alt_drop_to_user}"}
+: ${twitter_img_alt_chdir:="${twitter_img_alt_home}"}
+: ${twitter_img_alt_env:="PYTHONIOENCODING=UTF-8"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+command_args="-rP ${pidfile} -u ${twitter_img_alt_drop_to_user} /usr/local/bin/python2 ${twitter_img_alt_home}/${name}.py"
+required_dirs="${twitter_img_alt_home}"
+
+run_rc_command "$1"
