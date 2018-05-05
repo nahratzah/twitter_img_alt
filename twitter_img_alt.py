@@ -225,7 +225,7 @@ def annotateTweet(twitterApi, respondToTweet, toAnnotate, self):
 
     annotations = createAnnotations(twitterApi, toAnnotate)
     if len(annotations) == 0:
-        postReply(twitterApi, respondToTweet, u'''Sorry, I don't see any images in the tweet.''', user, self)
+        # postReply(twitterApi, respondToTweet, u'''Sorry, I don't see any images in the tweet.''', user, self)
         return
 
     statuses = annotationsToStatuses(annotations, 130)
