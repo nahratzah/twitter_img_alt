@@ -228,7 +228,7 @@ def annotateTweet(twitterApi, respondToTweet, toAnnotate, self):
         # postReply(twitterApi, respondToTweet, u'''Sorry, I don't see any images in the tweet.''', user, self)
         return
 
-    statuses = annotationsToStatuses(annotations, 130)
+    statuses = annotationsToStatuses(annotations, 270)
     idx = 1
     if len(statuses) == 1: # Single reply, keep it short.
         postReply(twitterApi, respondToTweet, statuses[0], user, self)
