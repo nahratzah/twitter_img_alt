@@ -24,7 +24,7 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-from __future__ import print_function
+
 import itertools
 import twitter
 import json
@@ -47,11 +47,11 @@ def getSecrets(secrets_file='secrets'):
     """
     with open(secrets_file, 'r') as f:
         return dict(
-            itertools.imap(
+            map(
                 lambda x: (x[0].strip(), x[1].strip().strip('"\'')),
-                itertools.ifilter(
+                filter(
                     lambda x: len(x) == 2 and x[0] is not None and x[1] is not None,
-                    itertools.imap(
+                    map(
                         lambda line: tuple(line.split('=', 1)),
                         f.readlines()))))
 
@@ -133,7 +133,7 @@ def generateAccessTokens():
     url = oauth_client.authorization_url(AUTHORIZATION_URL)
 
     print('Please visit this URL to grant access:\n{0}\n'.format(url))
-    pin = raw_input('Pin code: ')
+    pin = input('Pin code: ')
 
     oauth_client = OAuth1Session(consumer_key, client_secret=consumer_secret,
                                  resource_owner_key=resp.get('oauth_token'),
@@ -147,7 +147,7 @@ def generateAccessTokens():
     secrets['access_token_key'] = resp.get('oauth_token')
     secrets['access_token_secret'] = resp.get('oauth_token_secret')
     with open('secrets', 'w') as f:
-        for (k, v) in secrets.iteritems():
+        for (k, v) in secrets.items():
             f.write('{k} = {v}\n'.format(k=k, v=v))
 
 def findParentOrQuotedTweet(twitterApi, tweet):
@@ -168,12 +168,12 @@ def createAnnotations(twitterApi, tweet):
         If the tweet contains no images, an empty list is returned.
     """
     try:
-        media_images = [x for x in tweet.media if x.type == 'photo']
+        media_images = [x for x in tweet.media if x.type in {'animated_gif', 'photo'}]
         if len(media_images) == 0:
             return list()
         alt_text_list = [img.ext_alt_text for img in media_images]
         if all([x is None for x in alt_text_list]):
-            return [u'''No alt text :'(''']
+            return ['''No alt text :'(''']
         return [x or 'Missing alt text' for x in alt_text_list]
     except TypeError:
         return list()
@@ -181,9 +181,9 @@ def createAnnotations(twitterApi, tweet):
 def annotationsToStatuses(annotations, maxlen):
     # Prefix annotations with image index, if there are more than one images.
     if len(annotations) > 1:
-        annotations = [u'Image {0}:\n{1}'.format(idx, txt)
-            for (idx, txt) in itertools.izip(
-                range(1, len(annotations) + 1),
+        annotations = ['Image {0}:\n{1}'.format(idx, txt)
+            for (idx, txt) in zip(
+                list(range(1, len(annotations) + 1)),
                 [x for x in annotations])]
 
     result = list()
@@ -208,12 +208,12 @@ def postReply(twitterApi, respondToTweet, text, user, self_user, first=True):
         If first is set, the automatic metadata is suppressed.
         Param users: list of users to reply to.
     """
-    _LOG().info(u'Posting response to {respondToTweet.id}:\n------------------------------------------------------------------------\n{text}\n------------------------------------------------------------------------'.format(respondToTweet=respondToTweet, text=text))
+    _LOG().info('Posting response to {respondToTweet.id}:\n------------------------------------------------------------------------\n{text}\n------------------------------------------------------------------------'.format(respondToTweet=respondToTweet, text=text))
     exclude=[x.id for x in respondToTweet.user_mentions if x.id not in [user.id, self.id]]
-    _LOG().info(u'Excluding user IDs: {0}'.format(exclude))
+    _LOG().info('Excluding user IDs: {0}'.format(exclude))
 
     return twitterApi.PostUpdate(
-        status=u'@{user.screen_name} {text}'.format(user=user, text=text),
+        status='@{user.screen_name} {text}'.format(user=user, text=text),
         in_reply_to_status_id=respondToTweet.id,
         exclude_reply_user_ids=exclude,
         verify_status_length=False)
@@ -234,8 +234,8 @@ def annotateTweet(twitterApi, respondToTweet, toAnnotate, self):
         postReply(twitterApi, respondToTweet, statuses[0], user, self)
     else: # Multiple replies, threaded.
         first_reply = True
-        for (status, idx) in zip(statuses, range(1, len(statuses) + 1)):
-            msg = u'{0} [{1}/{2}]'.format(status.strip(), idx, len(statuses))
+        for (status, idx) in zip(statuses, list(range(1, len(statuses) + 1))):
+            msg = '{0} [{1}/{2}]'.format(status.strip(), idx, len(statuses))
             respondToTweet = postReply(twitterApi, respondToTweet, msg, user, self, first_reply)
             first_reply = False # Don't clear metadata in subsequent responses.
 
@@ -266,12 +266,12 @@ if __name__ == '__main__':
     if self is None:
         _LOG().error('Invalid credentials')
         sys.exit(1)
-    _LOG().info(u'Verification success, logged in as: @{user.screen_name} (id={user.id}: {user.name})\n'.format(user=self))
+    _LOG().info('Verification success, logged in as: @{user.screen_name} (id={user.id}: {user.name})\n'.format(user=self))
 
     for mention in Mentions(twitterApi).stream():
         try:
             if mention.user.id != self.id:
-                _LOG().info(u'tweet ID {mention.id} from @{mention.user.screen_name}: {mention.full_text}'.format(mention=mention))
+                _LOG().info('tweet ID {mention.id} from @{mention.user.screen_name}: {mention.full_text}'.format(mention=mention))
 
                 # Figure out which tweet to annotate.
                 toAnnotate = findParentOrQuotedTweet(twitterApi, mention)
@@ -281,4 +281,4 @@ if __name__ == '__main__':
                     _LOG().info('Nothing to annotate.')
                 _LOG().info('Done processing tweet ID {mention.id}.\n'.format(mention=mention))
         except Exception:
-            _LOG().exception(u'Failed to process https://twitter.com/{mention.user.screen_name}/status/{mention.id}'.format(mention=mention))
+            _LOG().exception('Failed to process https://twitter.com/{mention.user.screen_name}/status/{mention.id}'.format(mention=mention))
