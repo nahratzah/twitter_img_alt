@@ -274,7 +274,13 @@ if __name__ == '__main__':
                 _LOG().info('tweet ID {mention.id} from @{mention.user.screen_name}: {mention.full_text}'.format(mention=mention))
 
                 # Figure out which tweet to annotate.
-                toAnnotate = findParentOrQuotedTweet(twitterApi, mention)
+                if any(x.type in {'animated_gif', 'photo'} for x in (mention.media or [])):
+                    # The twitter API returns an incomplete representation in the stream API,
+                    # which lacks the ext_alt_text on media.
+                    # We work around this by refetching it.
+                    toAnnotate = twitterApi.GetStatus(mention.id)
+                else:
+                    toAnnotate = findParentOrQuotedTweet(twitterApi, mention)
                 if toAnnotate is not None:
                     annotateTweet(twitterApi, mention, toAnnotate, self)
                 else:
