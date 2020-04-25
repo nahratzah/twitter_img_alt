@@ -18,7 +18,7 @@ load_rc_config $name
 
 pidfile="/var/run/${name}.pid"
 command="/usr/sbin/daemon"
-command_args="-rP ${pidfile} -u ${twitter_img_alt_drop_to_user} /usr/local/bin/python3 ${twitter_img_alt_home}/${name}.py"
+command_args="-rP ${pidfile} -R 61 -u ${twitter_img_alt_drop_to_user} /usr/local/bin/python3 ${twitter_img_alt_home}/${name}.py"
 required_dirs="${twitter_img_alt_home}"
 
 run_rc_command "$1"
